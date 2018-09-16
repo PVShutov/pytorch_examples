@@ -6,9 +6,9 @@ import numpy as np
 from torchvision import transforms
 from torch.utils.data import Dataset, DataLoader
 
-import PyTorch1.config as config
+import GAN_examples.config as config
 
-class PokemonDataset(Dataset):
+class ExampleDataset(Dataset):
 	def __init__(self, root_dir, transform=None):
 		self.root_dir = root_dir
 		images_dir = os.listdir(root_dir)
@@ -28,11 +28,11 @@ class PokemonDataset(Dataset):
 			sample = self.transform(sample)
 		return torch.from_numpy(np.array(sample))
 
-def GetPokemonDataset():
+def GetDataset():
 	transform = transforms.Compose([
 		transforms.Resize((128, 128)),
 		transforms.RandomHorizontalFlip(),
 		transforms.ToTensor(),
-		transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
+		#transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
 	])
-	return PokemonDataset(config.PokemonDataset_path, transform)
+	return ExampleDataset(config.ExampleDataset_path, transform)
