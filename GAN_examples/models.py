@@ -64,23 +64,23 @@ class DCGAN_Discriminator(nn.Module):
 
 		self.main = nn.Sequential(OrderedDict([
 				('conv1', nn.Conv2d(3, filters, 4, 2, 1)), #64x64
-				#('batch_norm1', nn.BatchNorm2d(filters)),
+				('layer_norm1', nn.LayerNorm([filters, 64, 64])),
 				('lrelu_conv1', nn.LeakyReLU(True)),
 
 				('conv2', nn.Conv2d(filters, filters * 2, 4, 2, 1)), #32x32
-				#('batch_norm2', nn.BatchNorm2d(filters * 2)),
+				('layer_norm2', nn.LayerNorm([filters * 2, 32, 32])),
 				('lrelu_conv2', nn.LeakyReLU(True)),
 
 				('conv3', nn.Conv2d(filters * 2, filters * 4, 4, 2, 1)), #16x16
-				#('batch_norm3', nn.BatchNorm2d(filters * 4)),
+				('layer_norm3', nn.LayerNorm([filters * 4, 16, 16])),
 				('lrelu_conv3', nn.LeakyReLU(True)),
 
 				('conv4', nn.Conv2d(filters * 4, filters * 8, 4, 2, 1)), #8x8
-				#('batch_norm4', nn.BatchNorm2d(filters * 8)),
+				('layer_norm4', nn.LayerNorm([filters * 8, 8, 8])),
 				('lrelu_conv4', nn.LeakyReLU(True)),
 
 				('conv5', nn.Conv2d(filters * 8, filters * 16, 4, 2, 1)), #4x4
-				#('batch_norm5', nn.BatchNorm2d(filters * 16)),
+				('layer_norm5', nn.LayerNorm([filters * 16, 4, 4])),
 				('lrelu_conv5', nn.LeakyReLU(True)),
 			])
 		)

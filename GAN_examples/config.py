@@ -1,1 +1,1 @@
-ExampleDataset_path = 'your_path_to_dataset'
+ExampleDataset_path = 'data_path'

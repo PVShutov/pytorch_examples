@@ -157,6 +157,7 @@ def WGAN(G, D, dataloader):
 
 	d_iter = 5
 	g_iter = 1
+	g_iter_count = 0
 
 	num_iter = 0
 	for epoch in range(10000):
@@ -166,7 +167,10 @@ def WGAN(G, D, dataloader):
 			batch = batch.to(cuda0)
 
 			# Discriminator step
-			for i in range(d_iter):
+
+
+			real_d_iter = 100 if g_iter_count < 20 or g_iter_count % 500 == 0 else d_iter
+			for i in range(real_d_iter):
 				X = batch.view(-1, 3, 128, 128)
 				G_result = G(get_uniform((mini_batch, 100), -1.0, 1.0).view(-1, 100, 1, 1).to(cuda0))
 				D.zero_grad()
@@ -174,7 +178,7 @@ def WGAN(G, D, dataloader):
 				D_fake_loss = D(G_result).squeeze().mean()
 				D_train_loss = D_fake_loss - D_real_loss + calc_gradient_penalty(D, X, G_result, mini_batch)
 
-				if i == d_iter-1:
+				if i == real_d_iter-1:
 					line_pass(vis, num_iter, D_train_loss.item(), 'rgb(235, 99, 99)', "DCGAN_Train", name='d_loss', title='Loss')
 					line_pass(vis, num_iter, D_fake_loss.item(), 'rgb(96, 204, 173)', "DCGAN_FakeScore", name='fake score', title='Fake loss')
 
@@ -196,11 +200,13 @@ def WGAN(G, D, dataloader):
 				G_train_loss.backward()
 				G_optimizer.step()
 
+				g_iter_count += 1
+
 			show_gradient_norm(vis, G, 'G_Grad', 'Generator gradients norm')
 
 			# Other tasks
 			num_iter += 1
-			if num_iter % 100:
+			if num_iter % 100 == 0:
 				torch.save(G, "./models/pokemon_g")
 				torch.save(D, "./models/pokemon_d")
 			vis.images(G(z_fixed).to(cpu0),	nrow=4, opts=dict(title='Generator updates'), win="Generator_out")

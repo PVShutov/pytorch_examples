@@ -2,11 +2,6 @@ import warnings
 
 warnings.filterwarnings('ignore')
 
-
-import torch
-
-import torch.nn as nn
-import torch.optim as optim
 from torch.utils.data import DataLoader
 
 
@@ -15,7 +10,7 @@ import GAN_examples.models as models, GAN_examples.datasets as datasets, GAN_exa
 
 def main():
 	# DATASET
-	dataloader = DataLoader(datasets.Dataset(), batch_size=16, shuffle=True, num_workers=4)
+	dataloader = DataLoader(datasets.GetDataset(), batch_size=16, shuffle=True, num_workers=4)
 
 
 	# MODELS
