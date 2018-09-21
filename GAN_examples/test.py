@@ -12,13 +12,11 @@ def interpret_by_model_model(source, path_to_generator):
 	cpu0 = torch.device('cpu')
 
 	G = torch.load(path_to_generator)
-	#G.cuda()
-
 
 	logging.info("DCGAN interpret start")
 
 	vis.images(
-		source,
+		source*0.5 + 0.5,
 		opts=dict(title='source'),
 		win="source",
 	)
@@ -60,8 +58,6 @@ def interpret_by_model_model(source, path_to_generator):
 
 
 
-
-
 def show_generator_example(path_to_generator, example_count=8):
 	cuda0 = torch.device('cuda:0')
 	cpu0 = torch.device('cpu')
@@ -74,7 +70,7 @@ def show_generator_example(path_to_generator, example_count=8):
 		return (b-a)*torch.rand(size) + a
 	z_fixed = get_uniform((8, 100), -1.0, 1.0).view(-1, 100, 1, 1).to(cuda0)
 	vis.images(
-		G(z_fixed).to(cpu0),
+		G(z_fixed).to(cpu0)*0.5 + 0.5,
 		opts=dict(title='Generator updates'),
 		win="Generator_out",
 	)

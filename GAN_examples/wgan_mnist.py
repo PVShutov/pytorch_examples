@@ -12,13 +12,15 @@ from torchvision import datasets, transforms
 from utils import visdom_wrapper
 import GAN_examples.config as config
 
+
+
 def get_mnist_dataset(train=True):
 	return datasets.MNIST(config.Datasets_Path+"/mnist", train=train, download=True,
 		               transform=transforms.Compose([
 			               transforms.Resize((32, 32)),
-			               transforms.ToTensor()
+			               transforms.ToTensor(),
+			               transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
 		               ]))
-
 
 class Generator(nn.Module):
 	def __init__(self, input_shape):
@@ -135,13 +137,11 @@ def train(G, D, dataloader):
 	cuda0 = torch.device('cuda:0')
 	cpu0 = torch.device('cpu')
 
-
 	# LOSS + OPTIMIZER
 	G_optimizer = optim.Adam(G.parameters(), lr=0.0001, betas=(0., 0.9))
 	D_optimizer = optim.Adam(D.parameters(), lr=0.0001, betas=(0., 0.9))
 	#G_optimizer = optim.RMSprop(G.parameters(), lr=2e-4)
 	#D_optimizer = optim.RMSprop(D.parameters(), lr=2e-4)
-
 
 	logging.info("WGAN-GP training start")
 
@@ -150,6 +150,8 @@ def train(G, D, dataloader):
 		return (b-a)*torch.rand(size) + a
 
 	z_fixed = get_uniform((8, 100), -1.0, 1.0).view(-1, 100, 1, 1).to(cuda0)
+
+
 
 
 	d_iter = 5
@@ -161,6 +163,7 @@ def train(G, D, dataloader):
 		for batch in dataloader:
 			batch = batch[0]
 			mini_batch = batch.size()[0]
+
 			batch = batch.to(cuda0)
 
 			# Discriminator step
@@ -171,8 +174,8 @@ def train(G, D, dataloader):
 				X = batch.view(-1, 1, 32, 32)
 				G_result = G(get_uniform((mini_batch, 100), -1.0, 1.0).view(-1, 100, 1, 1).to(cuda0))
 				D.zero_grad()
-				D_real_loss = D(X).squeeze().mean()
-				D_fake_loss = D(G_result).squeeze().mean()
+				D_real_loss = D(X).mean()
+				D_fake_loss = D(G_result).mean()
 				D_train_loss = D_fake_loss - D_real_loss + calc_gradient_penalty(D, X, G_result, mini_batch)
 
 				if i == real_d_iter-1:
@@ -186,7 +189,7 @@ def train(G, D, dataloader):
 			for i in range(g_iter):
 				G_result = G(get_uniform((mini_batch, 100), -1.0, 1.0).view(-1, 100, 1, 1).to(cuda0))
 				G.zero_grad()
-				G_train_loss = -D(G_result).squeeze().mean()
+				G_train_loss = -D(G_result).mean()
 
 				visdom_wrapper.line_pass(vis, num_iter, G_train_loss.item(), 'rgb(99, 153, 235)', "Train", name='g_loss', title='Loss')
 
@@ -201,6 +204,6 @@ def train(G, D, dataloader):
 			if num_iter % 100 == 0:
 				torch.save(G, config.Models_Path + "/mnist_g")
 				torch.save(D, config.Models_Path + "/mnist_d")
-			vis.images(G(z_fixed).to(cpu0),	nrow=4, opts=dict(title='Generator updates'), win="Generator_out")
+			vis.images(G(z_fixed).to(cpu0)*0.5 + 0.5,	nrow=4, opts=dict(title='Generator updates'), win="Generator_out")
 
 		logging.info("WGAN-GP epoch {0} end".format(epoch))
