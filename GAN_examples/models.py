@@ -90,7 +90,7 @@ class DCGAN_Discriminator(nn.Module):
 			if isinstance(m, nn.ConvTranspose2d):
 				torch.nn.init.kaiming_uniform_(m.weight)
 				torch.nn.init.constant_(m.bias, 0.0)
-			elif isinstance(m, nn.BatchNorm2d):
+			elif isinstance(m, nn.LayerNorm):
 				m.weight.data.fill_(1.0)
 				torch.nn.init.constant_(m.bias, 0.0)
 

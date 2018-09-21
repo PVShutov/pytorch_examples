@@ -3,26 +3,21 @@ import warnings
 warnings.filterwarnings('ignore')
 
 from torch.utils.data import DataLoader
-
-
-import GAN_examples.models as models, GAN_examples.datasets as datasets, GAN_examples.training as training, GAN_examples.test as test
-
+import GAN_examples.wgan_mnist as WGAN_MNIST
 
 def main():
 	# DATASET
-	dataloader = DataLoader(datasets.GetDataset(), batch_size=16, shuffle=True, num_workers=4)
-
+	dataloader = DataLoader(WGAN_MNIST.get_mnist_dataset(), batch_size=16, shuffle=True, num_workers=4)
 
 	# MODELS
-	G = models.DCGAN_Generator(100)
-	D = models.DCGAN_Discriminator(output_type="LINEAR")
+	G = WGAN_MNIST.Generator(100)
+	D = WGAN_MNIST.Discriminator()
 
 	G.cuda()
 	D.cuda()
 	# TRAINING
 
-	training.WGAN(G, D, dataloader)
-
+	WGAN_MNIST.train(G, D, dataloader)
 
 
 if __name__ == '__main__':

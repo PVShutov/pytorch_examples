@@ -3,7 +3,7 @@ import torch
 
 from PIL import Image
 import numpy as np
-from torchvision import transforms
+from torchvision import datasets, transforms
 from torch.utils.data import Dataset, DataLoader
 
 import GAN_examples.config as config
@@ -35,4 +35,6 @@ def GetDataset():
 		transforms.ToTensor(),
 		#transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
 	])
-	return ExampleDataset(config.ExampleDataset_path, transform)
+	return ExampleDataset(config.Datasets_Path+"/example_dataset", transform)
+
+

@@ -12,7 +12,7 @@ def interpret_by_model_model(source, path_to_generator):
 	cpu0 = torch.device('cpu')
 
 	G = torch.load(path_to_generator)
-	G.cuda()
+	#G.cuda()
 
 
 	logging.info("DCGAN interpret start")
@@ -22,14 +22,18 @@ def interpret_by_model_model(source, path_to_generator):
 		opts=dict(title='source'),
 		win="source",
 	)
+	source = source.to(cuda0)
 
 	# LOSS + OPTIMIZER
 	L1Loss = nn.L1Loss()
 
-	z_0 = torch.randn(100, requires_grad=True, device=cuda0)
+	def get_uniform(size, a, b):
+		return (b-a)*torch.rand(size, requires_grad=True, device=cuda0) + a
+
+	z_0 = torch.randn(100, requires_grad=True, device=cuda0)#get_uniform(100, -1.0, 1.0)
 	G_optimizer = optim.Adam([z_0], lr=0.5)
 
-	for i in range(200):
+	for i in range(500):
 
 		G_result = G(z_0.view(-1, 100, 1, 1))
 
@@ -59,15 +63,18 @@ def interpret_by_model_model(source, path_to_generator):
 
 
 def show_generator_example(path_to_generator, example_count=8):
-
+	cuda0 = torch.device('cuda:0')
+	cpu0 = torch.device('cpu')
 	vis = visdom.Visdom()
 
 	G = torch.load(path_to_generator)
 
 
-	z_fixed = torch.randn((example_count, 100)).view(-1, 100, 1, 1)
+	def get_uniform(size, a, b):
+		return (b-a)*torch.rand(size) + a
+	z_fixed = get_uniform((8, 100), -1.0, 1.0).view(-1, 100, 1, 1).to(cuda0)
 	vis.images(
-		G(z_fixed),
+		G(z_fixed).to(cpu0),
 		opts=dict(title='Generator updates'),
 		win="Generator_out",
 	)

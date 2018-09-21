@@ -1,1 +1,2 @@
-ExampleDataset_path = 'data_path'
+Datasets_Path = "../datasets"
+Models_Path = "../models"
