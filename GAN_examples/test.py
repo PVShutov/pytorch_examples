@@ -1,4 +1,4 @@
-import logging
+import logging, math
 
 import visdom
 import torch
@@ -25,13 +25,18 @@ def interpret_by_model_model(source, path_to_generator):
 	# LOSS + OPTIMIZER
 	L1Loss = nn.L1Loss()
 
-	def get_uniform(size, a, b):
-		return (b-a)*torch.rand(size, requires_grad=True, device=cuda0) + a
 
-	z_0 = torch.randn(100, requires_grad=True, device=cuda0)#get_uniform(100, -1.0, 1.0)
+
+	z_0 = torch.randn(100, requires_grad=True, device=cuda0)
 	G_optimizer = optim.Adam([z_0], lr=0.5)
 
+	init_lr = 0.5
+
 	for i in range(500):
+
+		lr = init_lr * (1 - i / 500) ** 0.2
+		for param_group in G_optimizer.param_groups:
+			param_group['lr'] = lr
 
 		G_result = G(z_0.view(-1, 100, 1, 1))
 
@@ -41,7 +46,7 @@ def interpret_by_model_model(source, path_to_generator):
 			win="new",
 		)
 
-		G_loss = L1Loss(G_result.squeeze(), source)
+		G_loss = L1Loss(G_result.squeeze(), source.squeeze())
 		G_loss.backward()
 		G_optimizer.step()
 		z_0.grad.data.zero_()
@@ -58,19 +63,12 @@ def interpret_by_model_model(source, path_to_generator):
 
 
 
-def show_generator_example(path_to_generator, example_count=8):
+def show_generator_example(path_to_generator, example_count=16):
 	cuda0 = torch.device('cuda:0')
 	cpu0 = torch.device('cpu')
 	vis = visdom.Visdom()
 
 	G = torch.load(path_to_generator)
 
-
-	def get_uniform(size, a, b):
-		return (b-a)*torch.rand(size) + a
-	z_fixed = get_uniform((8, 100), -1.0, 1.0).view(-1, 100, 1, 1).to(cuda0)
-	vis.images(
-		G(z_fixed).to(cpu0)*0.5 + 0.5,
-		opts=dict(title='Generator updates'),
-		win="Generator_out",
-	)
+	z_fixed = torch.randn((example_count, 100)).view(-1, 100, 1, 1).to(cuda0)
+	vis.images(G(z_fixed).to(cpu0) * 0.5 + 0.5, nrow=int(math.sqrt(example_count)), opts=dict(title='Generator updates'), win="Generator_out")
