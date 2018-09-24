@@ -32,9 +32,9 @@ def interpret_by_model_model(source, path_to_generator):
 
 	init_lr = 0.5
 
-	for i in range(500):
+	for i in range(1000):
 
-		lr = init_lr * (1 - i / 500) ** 0.2
+		lr = init_lr * (1 - i / 1000) ** 0.2
 		for param_group in G_optimizer.param_groups:
 			param_group['lr'] = lr
 

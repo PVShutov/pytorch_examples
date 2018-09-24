@@ -3,6 +3,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 from torch.utils.data import DataLoader
+import GAN_examples.wgan_gp_mnist as WGAN_GP_MNIST
 import GAN_examples.wgan_mnist as WGAN_MNIST
 import GAN_examples.dcgan_mnist as DCGAN_MNIST
 import GAN_examples.test as test
@@ -26,6 +27,6 @@ if __name__ == '__main__':
 	main()
 
 	#dataset = DCGAN_MNIST.get_mnist_dataset()
-	#test.interpret_by_model_model(dataset[15000][0], '../models/mnist_g')
+	#test.interpret_by_model_model(dataset[18710][0], '../models/mnist_g')
 
-	#test.show_generator_example('../models/mnist_g', 64)
+	#test.show_generator_example('../models/dcgan_mnist_g', 64)

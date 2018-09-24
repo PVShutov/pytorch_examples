@@ -111,46 +111,19 @@ class Discriminator(nn.Module):
 
 
 
-from torch import autograd
-def calc_gradient_penalty(netD, real_data, fake_data, BATCH_SIZE):
-	cuda0 = torch.device('cuda:0')
-	alpha = torch.rand(BATCH_SIZE, 1).to(cuda0)
-	alpha = alpha.expand(BATCH_SIZE, int(real_data.nelement() / BATCH_SIZE)).contiguous()
-	alpha = alpha.view(BATCH_SIZE, 1, 32, 32)
-	alpha = alpha.to(cuda0)
-	interpolates = alpha * real_data.detach() + ((1 - alpha) * fake_data.detach())
-	interpolates = interpolates.to(cuda0)
-	interpolates = autograd.Variable(interpolates, requires_grad=True)
-	disc_interpolates = netD(interpolates)
-	gradients = autograd.grad(outputs=disc_interpolates, inputs=interpolates,
-	                          grad_outputs=torch.ones(disc_interpolates.size()).to(cuda0),
-	                          create_graph=True, retain_graph=True, only_inputs=True)[0]
-	gradients = gradients.view(gradients.size(0), -1)
-	gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * 10
-	return gradient_penalty
-
-
-
-
 def train(G, D, dataloader):
 	vis = visdom.Visdom()
 	cuda0 = torch.device('cuda:0')
 	cpu0 = torch.device('cpu')
 
 	# LOSS + OPTIMIZER
-	G_optimizer = optim.Adam(G.parameters(), lr=0.0001, betas=(0., 0.9))
-	D_optimizer = optim.Adam(D.parameters(), lr=0.0001, betas=(0., 0.9))
-	#G_optimizer = optim.RMSprop(G.parameters(), lr=2e-4)
-	#D_optimizer = optim.RMSprop(D.parameters(), lr=2e-4)
+	G_optimizer = optim.RMSprop(G.parameters(), lr=2e-4)
+	D_optimizer = optim.RMSprop(D.parameters(), lr=2e-4)
 
 	logging.info("WGAN-GP training start")
 
 
-	def get_uniform(size, a, b):
-		return (b-a)*torch.rand(size) + a
-
 	z_fixed = torch.randn((16, 100)).view(-1, 100, 1, 1).to(cuda0)
-
 
 	d_iter = 5
 	g_iter = 1
@@ -174,13 +147,16 @@ def train(G, D, dataloader):
 				D.zero_grad()
 				D_real_loss = D(X).mean()
 				D_fake_loss = D(G_result).mean()
-				D_train_loss = D_fake_loss - D_real_loss + calc_gradient_penalty(D, X, G_result, mini_batch)
+				D_train_loss = D_fake_loss - D_real_loss
 
 				if num_iter % 10 == 0 and i == real_d_iter-1:
 					visdom_wrapper.line_pass(vis, num_iter, -D_train_loss.item(), 'rgb(235, 99, 99)', "Train", name='d_loss', title='Loss')
 
 				D_train_loss.backward()
 				D_optimizer.step()
+
+				for p in D.parameters():
+					p.data.clamp_(-0.01, 0.01)
 
 
 			# Generator step
@@ -201,8 +177,8 @@ def train(G, D, dataloader):
 			# Other tasks
 			num_iter += 1
 			if num_iter % 100 == 0:
-				torch.save(G, config.Models_Path + "/mnist_g")
-				torch.save(D, config.Models_Path + "/mnist_d")
+				torch.save(G, config.Models_Path + "/wgan_mnist_g")
+				torch.save(D, config.Models_Path + "/wgan_mnist_d")
 
 			if num_iter % 10 == 0:
 				vis.images(G(z_fixed).to(cpu0)*0.5 + 0.5,	nrow=4, opts=dict(title='Generator updates'), win="Generator_out")
