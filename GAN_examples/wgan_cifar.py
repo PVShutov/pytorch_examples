@@ -9,13 +9,13 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 
-from utils import visdom_wrapper
+from utils import visdom_wrapper, utils
 import GAN_examples.config as config
 
 
 
-def get_mnist_dataset(train=True):
-	return datasets.MNIST(config.Datasets_Path+"/mnist", train=train, download=True,
+def get_dataset(train=True):
+	return datasets.CIFAR10(config.Datasets_Path+"/cifar", train=train, download=True,
 		               transform=transforms.Compose([
 			               transforms.Resize((32, 32)),
 			               transforms.ToTensor(),
@@ -36,23 +36,29 @@ class Generator(nn.Module):
 				('batch_norm2', nn.BatchNorm2d(filters * 2)),
 				('relu_conv2', nn.ReLU()),
 
-				('conv3', nn.ConvTranspose2d(filters * 2, filters, 4, 2, 1)),  # 16x16
-				('batch_norm3', nn.BatchNorm2d(filters )),
+				('conv3', nn.Conv2d(filters * 2, filters * 2, 3, 1, 1)),  # 8x8
+				('batch_norm3', nn.BatchNorm2d(filters * 2)),
 				('relu_conv3', nn.ReLU()),
+
+				('conv4', nn.ConvTranspose2d(filters * 2, filters, 4, 2, 1)),  # 16x16
+				('batch_norm4', nn.BatchNorm2d(filters )),
+				('relu_conv4', nn.ReLU()),
 			])
 		)
 
 
 		for m in self.main:
 			if isinstance(m, nn.ConvTranspose2d):
-				torch.nn.init.kaiming_uniform_(m.weight, nonlinearity='relu')
+				torch.nn.init.normal_(m.weight, 0, 0.002)
+				#torch.nn.init.kaiming_uniform_(m.weight, nonlinearity='relu')
 				torch.nn.init.constant_(m.bias, 0.0)
 			elif isinstance(m, nn.BatchNorm2d):
 				m.weight.data.fill_(1.0)
 				torch.nn.init.constant_(m.bias, 0.0)
 
-		self.output = nn.ConvTranspose2d(filters, 1, 4, 2, 1)  # 32x32
-		torch.nn.init.xavier_uniform_(self.output.weight, gain=nn.init.calculate_gain('tanh'))
+		self.output = nn.ConvTranspose2d(filters, 3, 4, 2, 1)  # 32x32
+		torch.nn.init.normal_(self.output.weight, 0, 0.002)
+		#torch.nn.init.xavier_uniform_(self.output.weight, gain=nn.init.calculate_gain('tanh'))
 		torch.nn.init.constant_(self.output.bias, 0.0)
 
 	def forward(self, input):
@@ -72,7 +78,7 @@ class Discriminator(nn.Module):
 
 
 		self.main = nn.Sequential(OrderedDict([
-				('conv1', nn.Conv2d(1, filters, 4, 2, 1)), #16x16
+				('conv1', nn.Conv2d(3, filters, 4, 2, 1)), #16x16
 				('layer_norm1', nn.LayerNorm([filters, 16, 16])),
 				('lrelu_conv1', nn.LeakyReLU()),
 
@@ -84,9 +90,13 @@ class Discriminator(nn.Module):
 				('layer_norm3', nn.LayerNorm([filters * 4, 4, 4])),
 				('lrelu_conv3', nn.LeakyReLU()),
 
-				('conv4', nn.Conv2d(filters * 4, filters * 8, 4, 2, 1)), #2x2
-				('layer_norm4', nn.LayerNorm([filters * 8, 2, 2])),
-				('lrelu_conv4', nn.LeakyReLU())
+				('conv4', nn.Conv2d(filters * 4, filters * 4, 3, 1, 1)),  # 4x4
+				('batch_norm4', nn.LayerNorm([filters * 4, 4, 4])),
+				('relu_conv4', nn.LeakyReLU()),
+
+				('conv5', nn.Conv2d(filters * 4, filters * 8, 4, 2, 1)), #2x2
+				('layer_norm5', nn.LayerNorm([filters * 8, 2, 2])),
+				('lrelu_conv5', nn.LeakyReLU())
 			])
 		)
 
@@ -99,14 +109,13 @@ class Discriminator(nn.Module):
 				m.weight.data.fill_(1.0)
 				torch.nn.init.constant_(m.bias, 0.0)
 
-		self.output = nn.Linear(filters * 8 * 2 * 2, 1)
+		self.output = nn.Conv2d(filters * 8, 1, 2, 1, 0)
 		torch.nn.init.xavier_uniform_(self.output.weight, gain=nn.init.calculate_gain('linear'))
 		torch.nn.init.constant_(self.output.bias, 0.0)
 
-
 	def forward(self, input):
 		x = self.main(input)
-		x = self.output(x.view(-1, self.filters * 8 * 2 * 2))
+		x = self.output(x)
 		return x
 
 
@@ -115,12 +124,8 @@ from torch import autograd
 def calc_gradient_penalty(netD, real_data, fake_data, BATCH_SIZE):
 	cuda0 = torch.device('cuda:0')
 	alpha = torch.rand(BATCH_SIZE, 1).to(cuda0)
-	alpha = alpha.expand(BATCH_SIZE, int(real_data.nelement() / BATCH_SIZE)).contiguous()
-	alpha = alpha.view(BATCH_SIZE, 1, 32, 32)
-	alpha = alpha.to(cuda0)
-	interpolates = alpha * real_data.detach() + ((1 - alpha) * fake_data.detach())
-	interpolates = interpolates.to(cuda0)
-	interpolates = autograd.Variable(interpolates, requires_grad=True)
+	alpha = alpha.expand(BATCH_SIZE, int(real_data.nelement() / BATCH_SIZE)).contiguous().view(BATCH_SIZE, 3, 32, 32)
+	interpolates = alpha * real_data + ((1 - alpha) * fake_data)
 	disc_interpolates = netD(interpolates)
 	gradients = autograd.grad(outputs=disc_interpolates, inputs=interpolates,
 	                          grad_outputs=torch.ones(disc_interpolates.size()).to(cuda0),
@@ -132,22 +137,22 @@ def calc_gradient_penalty(netD, real_data, fake_data, BATCH_SIZE):
 
 
 
-def train(G, D, dataloader):
-	vis = visdom.Visdom()
+def train(G, D, dataloader, mode="vanilla"):
+	vis = visdom.Visdom(base_url=config.Visdom_Base_Url)
 	cuda0 = torch.device('cuda:0')
 	cpu0 = torch.device('cpu')
 
 	# LOSS + OPTIMIZER
-	G_optimizer = optim.Adam(G.parameters(), lr=0.0001, betas=(0., 0.9))
-	D_optimizer = optim.Adam(D.parameters(), lr=0.0001, betas=(0., 0.9))
-	#G_optimizer = optim.RMSprop(G.parameters(), lr=2e-4)
-	#D_optimizer = optim.RMSprop(D.parameters(), lr=2e-4)
+
+	if mode != 'vanilla':
+		G_optimizer = optim.Adam(G.parameters(), lr=0.0001, betas=(0., 0.9))
+		D_optimizer = optim.Adam(D.parameters(), lr=0.0001, betas=(0., 0.9))
+	else:
+		G_optimizer = optim.RMSprop(G.parameters(), lr=0.0001)
+		D_optimizer = optim.RMSprop(D.parameters(), lr=0.0001)
 
 	logging.info("WGAN-GP training start")
 
-
-	def get_uniform(size, a, b):
-		return (b-a)*torch.rand(size) + a
 
 	z_fixed = torch.randn((16, 100)).view(-1, 100, 1, 1).to(cuda0)
 
@@ -164,23 +169,36 @@ def train(G, D, dataloader):
 
 			batch = batch.to(cuda0)
 
+
+			utils.exp_lr_scheduler(G_optimizer, num_iter, lr=0.0001)
+			utils.exp_lr_scheduler(D_optimizer, num_iter, lr=0.0001)
+
+
 			# Discriminator step
+			#real_d_iter = 100 if g_iter_count < 20 or g_iter_count % 500 == 0 else d_iter
+			for i in range(d_iter):
+				X = batch.view(-1, 3, 32, 32)
 
-
-			real_d_iter = d_iter#100 if g_iter_count < 20 or g_iter_count % 500 == 0 else d_iter
-			for i in range(real_d_iter):
-				X = batch.view(-1, 1, 32, 32)
 				G_result = G(torch.randn((mini_batch, 100)).view(-1, 100, 1, 1).to(cuda0))
+
 				D.zero_grad()
 				D_real_loss = D(X).mean()
 				D_fake_loss = D(G_result).mean()
-				D_train_loss = D_fake_loss - D_real_loss + calc_gradient_penalty(D, X, G_result, mini_batch)
+				D_train_loss = D_fake_loss - D_real_loss
 
-				if num_iter % 10 == 0 and i == real_d_iter-1:
-					visdom_wrapper.line_pass(vis, num_iter, -D_train_loss.item(), 'rgb(235, 99, 99)', "Train", name='d_loss', title='Loss')
+				if mode == 'gp':
+					D_train_loss += calc_gradient_penalty(D, X, G_result, mini_batch)
 
 				D_train_loss.backward()
 				D_optimizer.step()
+
+				if mode == 'vanilla':
+					for p in D.parameters():
+						p.data.clamp_(-0.01, 0.01)
+
+				if num_iter % 10 == 0 and i == d_iter-1:
+					visdom_wrapper.line_pass(vis, num_iter, -D_train_loss.item(), 'rgb(235, 99, 99)', "Train", name='d_loss', title='Loss')
+
 
 
 			# Generator step
@@ -188,12 +206,11 @@ def train(G, D, dataloader):
 				G_result = G(torch.randn((mini_batch, 100)).view(-1, 100, 1, 1).to(cuda0))
 				G.zero_grad()
 				G_train_loss = -D(G_result).mean()
+				G_train_loss.backward()
+				G_optimizer.step()
 
 				if num_iter % 10 == 0:
 					visdom_wrapper.line_pass(vis, num_iter, G_train_loss.item(), 'rgb(99, 153, 235)', "Train", name='g_loss', title='Loss')
-
-				G_train_loss.backward()
-				G_optimizer.step()
 
 				g_iter_count += 1
 
@@ -201,8 +218,8 @@ def train(G, D, dataloader):
 			# Other tasks
 			num_iter += 1
 			if num_iter % 100 == 0:
-				torch.save(G, config.Models_Path + "/wgan_gp_mnist_g")
-				torch.save(D, config.Models_Path + "/wgan_gp_mnist_d")
+				torch.save(G, config.Models_Path + "/wgan_cifar_g")
+				torch.save(D, config.Models_Path + "/wgan_cifar_d")
 
 			if num_iter % 10 == 0:
 				vis.images(G(z_fixed).to(cpu0)*0.5 + 0.5,	nrow=4, opts=dict(title='Generator updates'), win="Generator_out")

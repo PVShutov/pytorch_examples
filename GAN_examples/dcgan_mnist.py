@@ -14,7 +14,7 @@ import GAN_examples.config as config
 import utils.utils as utils
 
 
-def get_mnist_dataset(train=True):
+def get_dataset(train=True):
 	return datasets.MNIST(config.Datasets_Path+"/mnist", train=train, download=True,
 		               transform=transforms.Compose([
 			               transforms.Resize((32, 32)),
@@ -112,7 +112,7 @@ class Discriminator(nn.Module):
 
 
 def train(G, D, dataloader):
-	vis = visdom.Visdom()
+	vis = visdom.Visdom(base_url=config.Visdom_Base_Url)
 	cuda0 = torch.device('cuda:0')
 	cpu0 = torch.device('cpu')
 
@@ -138,36 +138,32 @@ def train(G, D, dataloader):
 
 			y_real = torch.ones(mini_batch, device=cuda0)
 			y_fake = torch.zeros(mini_batch, device=cuda0)
-			# Discriminator step
 
 			utils.exp_lr_scheduler(G_optimizer, num_iter, lr=0.0002)
 			utils.exp_lr_scheduler(D_optimizer, num_iter, lr=0.0002)
 
-
+			# Discriminator step
 			X = batch.view(-1, 1, 32, 32)
 			G_result = G(torch.randn((mini_batch, 100)).view(-1, 100, 1, 1).to(cuda0))
 			D.zero_grad()
 			D_real_loss = BCE_loss(D(X).squeeze(), y_real)
 			D_fake_loss = BCE_loss(D(G_result).squeeze(), y_fake)
 			D_train_loss = D_real_loss + D_fake_loss
-
-			if num_iter % 10 == 0:
-				visdom_wrapper.line_pass(vis, num_iter, D_train_loss.item(), 'rgb(235, 99, 99)', "Train", name='d_loss', title='Loss')
-
 			D_train_loss.backward()
 			D_optimizer.step()
 
+			if num_iter % 10 == 0:
+				visdom_wrapper.line_pass(vis, num_iter, D_train_loss.item(), 'rgb(235, 99, 99)', "Train", name='d_loss', title='Loss')
 
 			# Generator step
 			G_result = G(torch.randn((mini_batch, 100)).view(-1, 100, 1, 1).to(cuda0))
 			G.zero_grad()
 			G_train_loss = BCE_loss(D(G_result).squeeze(), y_real)
+			G_train_loss.backward()
+			G_optimizer.step()
 
 			if num_iter % 10 == 0:
 				visdom_wrapper.line_pass(vis, num_iter, G_train_loss.item(), 'rgb(99, 153, 235)', "Train", name='g_loss', title='Loss')
-
-			G_train_loss.backward()
-			G_optimizer.step()
 
 
 			# Other tasks
