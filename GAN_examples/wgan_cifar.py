@@ -28,37 +28,40 @@ class Generator(nn.Module):
 		filters = 32
 
 		self.main = nn.Sequential(OrderedDict([
-				('conv1', nn.ConvTranspose2d(input_shape, filters * 4, 4)),   # 4x4
-				('batch_norm1', nn.BatchNorm2d(filters * 4)),
+				('conv1', nn.ConvTranspose2d(input_shape, filters * 8, 4)),   # 4x4
+				('batch_norm1', nn.BatchNorm2d(filters * 8)),
 				('relu_conv1', nn.ReLU()),
 
-				('conv2', nn.ConvTranspose2d(filters * 4, filters * 2, 4, 2, 1)),  # 8x8
-				('batch_norm2', nn.BatchNorm2d(filters * 2)),
+				('conv2', nn.ConvTranspose2d(filters * 8, filters * 4, 4, 2, 1)),  # 8x8
+				('batch_norm2', nn.BatchNorm2d(filters * 4)),
 				('relu_conv2', nn.ReLU()),
 
-				('conv3', nn.Conv2d(filters * 2, filters * 2, 3, 1, 1)),  # 8x8
-				('batch_norm3', nn.BatchNorm2d(filters * 2)),
+				('conv3', nn.Conv2d(filters * 4, filters * 4, 3, 1, 1)),  # 8x8
+				('batch_norm3', nn.BatchNorm2d(filters * 4)),
 				('relu_conv3', nn.ReLU()),
 
-				('conv4', nn.ConvTranspose2d(filters * 2, filters, 4, 2, 1)),  # 16x16
-				('batch_norm4', nn.BatchNorm2d(filters )),
+				('conv4', nn.ConvTranspose2d(filters * 4, filters * 2, 4, 2, 1)),  # 16x16
+				('batch_norm4', nn.BatchNorm2d(filters * 2)),
 				('relu_conv4', nn.ReLU()),
-			])
+
+				('conv5', nn.ConvTranspose2d(filters * 2, filters, 4, 2, 1)),  # 32x32
+				('batch_norm5', nn.BatchNorm2d(filters)),
+				('relu_conv5', nn.ReLU()),
+
+		])
 		)
 
 
 		for m in self.main:
 			if isinstance(m, nn.ConvTranspose2d):
 				torch.nn.init.normal_(m.weight, 0, 0.002)
-				#torch.nn.init.kaiming_uniform_(m.weight, nonlinearity='relu')
 				torch.nn.init.constant_(m.bias, 0.0)
 			elif isinstance(m, nn.BatchNorm2d):
 				m.weight.data.fill_(1.0)
 				torch.nn.init.constant_(m.bias, 0.0)
 
-		self.output = nn.ConvTranspose2d(filters, 3, 4, 2, 1)  # 32x32
+		self.output = nn.ConvTranspose2d(filters, 3, 3, 1, 1)  # 32x32
 		torch.nn.init.normal_(self.output.weight, 0, 0.002)
-		#torch.nn.init.xavier_uniform_(self.output.weight, gain=nn.init.calculate_gain('tanh'))
 		torch.nn.init.constant_(self.output.bias, 0.0)
 
 	def forward(self, input):
@@ -73,7 +76,7 @@ class Discriminator(nn.Module):
 	def __init__(self):
 		super(Discriminator, self).__init__()
 
-		filters = 16
+		filters = 128
 		self.filters = filters
 
 
@@ -94,8 +97,8 @@ class Discriminator(nn.Module):
 				('batch_norm4', nn.LayerNorm([filters * 4, 4, 4])),
 				('relu_conv4', nn.LeakyReLU()),
 
-				('conv5', nn.Conv2d(filters * 4, filters * 8, 4, 2, 1)), #2x2
-				('layer_norm5', nn.LayerNorm([filters * 8, 2, 2])),
+				('conv5', nn.Conv2d(filters * 4, filters * 8, 4, 1, 0)), #1x1
+				('layer_norm5', nn.LayerNorm([filters * 8, 1, 1])),
 				('lrelu_conv5', nn.LeakyReLU())
 			])
 		)
@@ -109,13 +112,13 @@ class Discriminator(nn.Module):
 				m.weight.data.fill_(1.0)
 				torch.nn.init.constant_(m.bias, 0.0)
 
-		self.output = nn.Conv2d(filters * 8, 1, 2, 1, 0)
+		self.output = nn.Linear(filters * 8, 1)
 		torch.nn.init.xavier_uniform_(self.output.weight, gain=nn.init.calculate_gain('linear'))
 		torch.nn.init.constant_(self.output.bias, 0.0)
 
 	def forward(self, input):
 		x = self.main(input)
-		x = self.output(x)
+		x = self.output(x.view(-1, self.filters * 8))
 		return x
 
 
@@ -170,8 +173,8 @@ def train(G, D, dataloader, mode="vanilla"):
 			batch = batch.to(cuda0)
 
 
-			utils.exp_lr_scheduler(G_optimizer, num_iter, lr=0.0001)
-			utils.exp_lr_scheduler(D_optimizer, num_iter, lr=0.0001)
+			utils.exp_lr_scheduler(G_optimizer, num_iter, lr=0.0001, factor=0.986)
+			utils.exp_lr_scheduler(D_optimizer, num_iter, lr=0.0001, factor=0.986)
 
 
 			# Discriminator step
